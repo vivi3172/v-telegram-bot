@@ -1,0 +1,14 @@
+{
+  "presets": [
+    {
+      "alias": "myproject",
+      "path": "C:\\Users\\YourName\\Projects\\MyProject",
+      "description": "My awesome project"
+    },
+    {
+      "alias": "another-app",
+      "path": "/home/user/projects/another-app",
+      "description": "Another web application"
+    }
+  ]
+}

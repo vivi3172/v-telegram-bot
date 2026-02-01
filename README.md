@@ -68,6 +68,12 @@ MCP_SERVER_PATH=node C:/path/to/v-mcp/index.js
 
 ### 步驟 4：配置專案（選擇性）
 
+複製範例配置檔：
+
+```bash
+cp projects.config.json.example projects.config.json
+```
+
 編輯 `projects.config.json` 新增您的專案：
 
 ```json
@@ -86,6 +92,8 @@ MCP_SERVER_PATH=node C:/path/to/v-mcp/index.js
   ]
 }
 ```
+
+**📌 注意：** `projects.config.json` 包含個人項目路徑，不會被上傳到 Git。請根據您的本地環境進行配置。
 
 ### 步驟 5：啟動機器人
 
