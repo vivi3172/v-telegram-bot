@@ -3,6 +3,9 @@ import { createConversationContext } from '../agent/createAgent.js';
 import { runAgent } from '../agent/runAgent.js';
 import { formatRequirementResult, splitLongMessage } from '../formatter.js';
 import { sessionManager } from '../sessionManager.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Initialize Telegram bot handler
@@ -16,6 +19,10 @@ export function initializeBotHandler(botToken, agent) {
   // Store active conversations
   const conversations = new Map();
 
+  // Get config file path
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const configPath = path.join(path.dirname(path.dirname(__dirname)), 'projects.config.json');
+
   /**
    * Get or create conversation context
    */
@@ -25,6 +32,49 @@ export function initializeBotHandler(botToken, agent) {
       conversations.set(userId, createConversationContext(userId));
     }
     return conversations.get(userId);
+  }
+
+  /**
+   * Save project to projects.config.json
+   */
+  function saveProjectToConfig(alias, projectPath, description = '') {
+    try {
+      let config = { presets: [] };
+
+      // Read existing config if it exists
+      if (fs.existsSync(configPath)) {
+        const configData = fs.readFileSync(configPath, 'utf-8');
+        config = JSON.parse(configData);
+      }
+
+      // Check if project already exists
+      const existingIndex = config.presets.findIndex(p => p.alias === alias);
+
+      if (existingIndex >= 0) {
+        // Update existing project
+        config.presets[existingIndex] = {
+          alias,
+          path: projectPath,
+          description: description || config.presets[existingIndex].description || '',
+        };
+        console.log(`✏️ Updated project in config: ${alias}`);
+      } else {
+        // Add new project
+        config.presets.push({
+          alias,
+          path: projectPath,
+          description: description || '',
+        });
+        console.log(`✅ Added project to config: ${alias}`);
+      }
+
+      // Write back to config file
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      return true;
+    } catch (error) {
+      console.error(`❌ Error saving project to config: ${error.message}`);
+      return false;
+    }
   }
 
   /**
@@ -162,11 +212,25 @@ export function initializeBotHandler(botToken, agent) {
         return;
       }
 
-      userSession.projectAliases[alias.trim()] = projectPath;
-      bot.sendMessage(
-        chatId,
-        `✅ Project registered: ${alias.trim()}\nPath: ${projectPath}`
-      );
+      const trimmedAlias = alias.trim();
+      userSession.projectAliases[trimmedAlias] = projectPath;
+      
+      // Save to projects.config.json
+      const saved = saveProjectToConfig(trimmedAlias, projectPath);
+
+      if (saved) {
+        bot.sendMessage(
+          chatId,
+          `✅ 專案已註冊：${trimmedAlias}\n路徑：${projectPath}\n\n📝 已自動保存到 projects.config.json`,
+          { parse_mode: 'Markdown' }
+        );
+      } else {
+        bot.sendMessage(
+          chatId,
+          `⚠️ 專案已新增到會話，但無法保存到配置檔案。\n別名：${trimmedAlias}\n路徑：${projectPath}`,
+          { parse_mode: 'Markdown' }
+        );
+      }
     } else {
       bot.sendMessage(chatId, '❌ Unknown command. Use: list, use, set');
     }
