@@ -1,188 +1,46 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { buildToolDefinitions, executeTool } from '../tools/mcpTools.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { CopilotClient } from '@github/copilot-sdk';
 
 /**
- * Create and initialize Copilot Agent
- * @returns {Promise<object>} Agent instance
+ * Create and initialize Copilot CLI client with session
+ * @returns {Promise<{client: CopilotClient, session: object}>} Agent object with client and session
  */
 export async function createAgent() {
-  let agentImpl = null;
+  let client = null;
 
   try {
-    const copilotSdk = await import('@github/copilot-sdk');
-    const { Agent } = copilotSdk;
-
-    if (!Agent) {
-      console.warn('⚠️  Copilot SDK Agent class not available, using fallback mode');
-      return createFallbackAgent();
-    }
-
-    const systemPromptPath = path.join(__dirname, 'systemPrompt.md');
-    const systemPrompt = fs.readFileSync(systemPromptPath, 'utf-8');
-
-    const toolDefinitions = buildToolDefinitions();
-
-    agentImpl = new Agent({
-      model: 'gpt-4',
-      systemPrompt: systemPrompt,
-      tools: toolDefinitions,
+    console.log('🤖 Initializing Copilot CLI Client...');
+    
+    // Create Copilot client
+    client = new CopilotClient();
+    
+    // Start client connection to Copilot CLI
+    console.log('📡 Starting Copilot CLI connection...');
+    await client.start();
+    console.log('✅ Copilot CLI connected');
+    
+    // Create session with streaming enabled for long tasks
+    console.log('🔄 Creating streaming session...');
+    const session = await client.createSession({
+      model: 'gpt-4.1',
+      streaming: true,
     });
 
-    console.log('✅ Copilot Agent initialized successfully');
-    return agentImpl;
-  } catch (error) {
-    console.warn(`⚠️  Copilot SDK not available (${error.message})`);
-    console.log('📝 Using fallback agent implementation');
-    return createFallbackAgent();
-  }
-}
+    if (!session) {
+      throw new Error('Failed to create session');
+    }
 
-/**
- * Fallback agent implementation (when SDK not available)
- */
-function createFallbackAgent() {
-  const systemPromptPath = path.join(__dirname, 'systemPrompt.md');
-  const systemPrompt = fs.readFileSync(systemPromptPath, 'utf-8');
-
-  return {
-    systemPrompt: systemPrompt,
-    tools: buildToolDefinitions(),
-    isLegacy: true,
+    console.log('✅ Copilot CLI Client initialized successfully');
+    console.log('📡 Model: gpt-4.1 | Streaming: enabled');
     
-    async run(message, conversationHistory = []) {
-      console.log('[Fallback Agent] Processing:', message);
-      return {
-        text: message,
-        toolCalls: [],
-        conversationHistory: conversationHistory,
-      };
-    },
-  };
-}
-
-/**
- * Run agent with user message
- * @param {object} agent - Agent instance
- * @param {string} userMessage - User input message
- * @param {Array} conversationHistory - Previous conversation turns (optional)
- * @returns {Promise<{text: string, toolCalls: Array, toolResults: Array}>}
- */
-export async function runAgent(agent, userMessage, conversationHistory = []) {
-  console.log('\n🧠 [Agent Thinking]');
-  console.log('User:', userMessage);
-  if (!agent) {
-    throw new Error('Agent not initialized');
-  }
-
-  const messages = [
-    ...conversationHistory,
-    { role: 'user', content: userMessage },
-  ];
-
-  try {
-    // Call agent with message and get response
-    let response;
-
-    if (agent.isLegacy) {
-      // Fallback implementation
-      response = {
-        text: `Processing: ${userMessage}`,
-        toolCalls: [],
-      };
-    } else if (typeof agent.run === 'function') {
-      // Native Copilot Agent
-      response = await agent.run(userMessage, conversationHistory);
-    } else {
-      // Generic agent interface
-      response = await callAgent(agent, messages);
-    }
-
-    // Process tool calls if any
-    const toolResults = [];
-    console.log('🔧 Tool Calls:', response.toolCalls);
-
-
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      for (const toolCall of response.toolCalls) {
-        try {
-          const result = await executeTool(toolCall.name, toolCall.input);
-          toolResults.push({
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            result: result,
-          });
-        } catch (error) {
-          toolResults.push({
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            error: error.message,
-          });
-        }
-      }
-    }
-    console.log('🤖 Agent Reply:', response.text);
-
     return {
-      text: response.text || '',
-      toolCalls: response.toolCalls || [],
-      toolResults: toolResults,
-      conversationHistory: messages,
+      client,
+      session,
     };
   } catch (error) {
-    console.error('❌ Agent error:', error.message);
-    throw new Error(`Agent execution failed: ${error.message}`);
+    console.error(`❌ Copilot SDK initialization failed: ${error.message}`);
+    console.error('Error details:', error);
+    throw error;
   }
-}
-
-/**
- * Call generic agent interface
- */
-async function callAgent(agent, messages) {
-  if (agent.isLegacy) {
-    return {
-      text: messages[messages.length - 1].content,
-      toolCalls: [],
-    };
-  }
-
-  // This would be specific to the actual Agent SDK implementation
-  // Adjust based on actual Copilot SDK API
-  return {
-    text: 'Agent response pending implementation',
-    toolCalls: [],
-  };
-}
-
-/**
- * Create agent with custom configuration
- * @param {object} config - Configuration object
- * @returns {Promise<object>} Configured agent
- */
-export async function createAgentWithConfig(config = {}) {
-  const agent = await createAgent();
-
-  if (!agent) {
-    throw new Error('Failed to create agent');
-  }
-
-  // Merge custom config if provided
-  if (config.systemPrompt) {
-    agent.systemPrompt = config.systemPrompt;
-  }
-
-  if (config.model) {
-    agent.model = config.model;
-  }
-
-  if (config.maxTokens) {
-    agent.maxTokens = config.maxTokens;
-  }
-
-  return agent;
 }
 
 /**

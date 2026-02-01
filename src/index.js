@@ -73,18 +73,20 @@ function initializePresetProjects() {
  * Main bootstrap function
  */
 async function bootstrap() {
+  let agent = null;
+
   try {
-    console.log('🚀 Starting v-telegram-bot with Copilot SDK Agent...\n');
+    console.log('🚀 Starting v-telegram-bot with Copilot SDK Client...\n');
 
     // Initialize preset projects
     initializePresetProjects();
 
-    // Create Copilot Agent
-    console.log('\n🤖 Initializing Copilot Agent...');
-    const agent = await createAgent();
+    // Create Copilot Client
+    console.log('\n🤖 Initializing Copilot CLI Client...');
+    agent = await createAgent();
 
-    if (!agent) {
-      throw new Error('Failed to initialize agent');
+    if (!agent || !agent.session) {
+      throw new Error('Failed to initialize Copilot client');
     }
 
     // Initialize Telegram bot
@@ -102,17 +104,31 @@ async function bootstrap() {
     }
 
     // Graceful shutdown
-    process.on('SIGINT', async () => {
+    const cleanup = async () => {
       console.log('\n\n🛑 Shutting down gracefully...');
-      await closeMcpServer();
-      process.exit(0);
-    });
+      
+      // Stop Copilot client if available
+      if (agent?.client?.stop) {
+        try {
+          await agent.client.stop();
+          console.log('✅ Copilot client stopped');
+        } catch (error) {
+          console.warn(`⚠️  Error stopping Copilot client: ${error.message}`);
+        }
+      }
 
-    process.on('SIGTERM', async () => {
-      console.log('\n\n🛑 Shutting down gracefully...');
-      await closeMcpServer();
+      // Close MCP server if available
+      try {
+        await closeMcpServer();
+      } catch (error) {
+        console.warn(`⚠️  Error closing MCP server: ${error.message}`);
+      }
+
       process.exit(0);
-    });
+    };
+
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
   } catch (error) {
     console.error('❌ Bootstrap error:', error.message);
     console.error(error.stack);

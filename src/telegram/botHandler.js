@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { runAgent, createConversationContext } from '../agent/createAgent.js';
+import { createConversationContext } from '../agent/createAgent.js';
+import { runAgent } from '../agent/runAgent.js';
 import { formatRequirementResult, splitLongMessage } from '../formatter.js';
 import { sessionManager } from '../sessionManager.js';
 
@@ -52,6 +53,37 @@ Example:
     `.trim();
 
     bot.sendMessage(chatId, welcomeText);
+  });
+
+  /**
+   * Handle /copilot ping diagnostic command
+   */
+  bot.onText(/^\/copilot\s+ping$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    bot.sendChatAction(chatId, 'typing');
+
+    const userSession = sessionManager.getUserSession(userId);
+    const projectPath = userSession.activeProjectAlias
+      ? userSession.projectAliases[userSession.activeProjectAlias]
+      : 'No project selected';
+
+    try {
+      const result = await runAgent(agent, 'What is 2 + 2?', projectPath);
+      bot.sendMessage(
+        chatId,
+        `✅ <b>Copilot CLI Diagnostic</b>\n\n${result.text}`,
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      console.error('❌ Copilot ping error:', error.message);
+      bot.sendMessage(
+        chatId,
+        `❌ <b>Copilot CLI Error</b>\n\n${error.message}`,
+        { parse_mode: 'HTML' }
+      );
+    }
   });
 
   /**
@@ -128,22 +160,16 @@ Example:
     const userSession = sessionManager.getUserSession(userId);
 
     try {
-      // Build context-aware message
-      const contextMessage = buildContextMessage(
-        userMessage,
-        userSession,
-        conversation
-      );
+      // Get active project path
+      const projectPath = userSession.activeProjectAlias
+        ? userSession.projectAliases[userSession.activeProjectAlias]
+        : '';
 
-      // Run agent with conversation history
-      const agentResponse = await runAgent(
-        agent,
-        contextMessage,
-        conversation.getHistory()
-      );
+      // Run agent with project context
+      const agentResponse = await runAgent(agent, userMessage, projectPath);
 
       // Add to conversation history
-      conversation.addMessage('user', contextMessage);
+      conversation.addMessage('user', userMessage);
       conversation.addMessage('assistant', agentResponse.text);
 
       // Send response
@@ -151,12 +177,6 @@ Example:
 
       for (const line of responseLines) {
         bot.sendMessage(chatId, line, { parse_mode: 'HTML' });
-      }
-
-      // Send tool execution summary if any tools were called
-      if (agentResponse.toolResults && agentResponse.toolResults.length > 0) {
-        const summary = formatToolResults(agentResponse.toolResults);
-        bot.sendMessage(chatId, summary, { parse_mode: 'HTML' });
       }
     } catch (error) {
       console.error('❌ Error processing message:', error.message);
@@ -205,45 +225,10 @@ Example:
 }
 
 /**
- * Build context-aware message for agent
- */
-function buildContextMessage(userMessage, userSession, conversation) {
-  let contextMessage = userMessage;
-
-  if (userSession.activeProjectAlias) {
-    const projectPath = userSession.projectAliases[userSession.activeProjectAlias];
-    contextMessage = `
-Project: ${userSession.activeProjectAlias}
-Path: ${projectPath}
-
-Request: ${userMessage}
-    `.trim();
-  }
-
-  return contextMessage;
-}
-
-/**
  * Send project list as inline buttons
  */
 function sendProjectList(chatId, bot, userSession) {
   sendProjectListMessage(chatId, bot, userSession);
-}
-
-/**
- * Format tool execution results
- */
-function formatToolResults(toolResults) {
-  const summary = toolResults
-    .map((result) => {
-      if (result.error) {
-        return `❌ ${result.toolName}: ${result.error}`;
-      }
-      return `✅ ${result.toolName}: Success`;
-    })
-    .join('\n');
-
-  return `<b>Tool Execution:</b>\n${summary}`;
 }
 
 /**
