@@ -94,10 +94,6 @@ cp projects.config.json.example projects.config.json
 ### 步驟 5：啟動機器人
 
 ```bash
-# 開發模式（監視檔案變更）
-npm run dev
-
-# 生產模式
 npm start
 ```
 
