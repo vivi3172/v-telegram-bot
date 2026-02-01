@@ -1,15 +1,18 @@
 /**
- * Execute agent with Copilot SDK (STREAMING SAFE VERSION)
+ * Execute agent with Copilot SDK (STREAMING SAFE VERSION + TELEGRAM INTEGRATION)
  * - Avoids sendAndWait() timeout issues
  * - Uses streaming events: assistant.message_delta + session.idle
  * - Long task support (180-300s timeout)
+ * - Real-time Telegram message updates (throttled)
  * - Proper event cleanup to prevent memory leaks
  * @param {object} agent - { client, session }
  * @param {string} userMessage - User request
  * @param {string} projectPath - Active project path context
+ * @param {object} bot - Telegram bot instance (optional)
+ * @param {number} chatId - Telegram chat ID (optional)
  * @returns {Promise<{text: string, toolCalls: [], toolResults: []}>}
  */
-export async function runAgent(agent, userMessage, projectPath = '') {
+export async function runAgent(agent, userMessage, projectPath = '', bot = null, chatId = null) {
   if (!agent || !agent.session) {
     throw new Error('Agent or session not initialized');
   }
@@ -19,8 +22,9 @@ export async function runAgent(agent, userMessage, projectPath = '') {
   console.log('💬 User Request:', userMessage.substring(0, 100) + (userMessage.length > 100 ? '...' : ''));
 
   const { session } = agent;
-  const TIMEOUT_MS = 180000; // 3 minutes for long tasks (review, diff, etc.)
+  const TIMEOUT_MS = 180000; // 3 minutes for long tasks
   const HEARTBEAT_INTERVAL = 5000; // Log every 5 seconds while thinking
+  const TELEGRAM_THROTTLE = 2000; // Flush to Telegram every 2 seconds
 
   // Build composed prompt with project context
   const composed = `
@@ -39,22 +43,82 @@ ${userMessage}
     let isFinished = false;
     let timeoutHandle = null;
     let heartbeatHandle = null;
+    let telegramThrottleHandle = null;
     let hasStartedStreaming = false;
+    let telegramMessageId = null;
+    let lastTelegramUpdate = 0;
+    let unsubscribeDelta = null;
+    let unsubscribeIdle = null;
+    let unsubscribeError = null;
 
-    // Event handlers
+    const sendToTelegram = async (text) => {
+      if (!bot || !chatId) return null;
+
+      try {
+        const msg = await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        return msg.message_id;
+      } catch (err) {
+        console.error('❌ Telegram send error:', err.message);
+        return null;
+      }
+    };
+
+    const editTelegramMessage = async (messageId, text) => {
+      if (!bot || !chatId || !messageId) return false;
+
+      try {
+        await bot.editMessageText(text, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'HTML',
+        });
+        return true;
+      } catch (err) {
+        if (err.message.includes('message not modified')) {
+          return true; // Not an error, content is the same
+        }
+        console.error('❌ Telegram edit error:', err.message);
+        return false;
+      }
+    };
+
+    const flushTelegramBuffer = async () => {
+      if (!bot || !chatId || !output || isFinished) return;
+
+      const now = Date.now();
+      if (now - lastTelegramUpdate < TELEGRAM_THROTTLE) return;
+
+      try {
+        if (!telegramMessageId) {
+          // First update: send initial message
+          telegramMessageId = await sendToTelegram(output);
+        } else {
+          // Subsequent updates: edit message
+          const success = await editTelegramMessage(telegramMessageId, output);
+          if (!success && telegramMessageId) {
+            // Fallback: send new message if edit fails
+            telegramMessageId = await sendToTelegram(output);
+          }
+        }
+        lastTelegramUpdate = now;
+      } catch (err) {
+        console.error('❌ Telegram flush error:', err.message);
+      }
+    };
+
     const onDelta = (event) => {
       if (isFinished) return;
-      
+
       // Log once when first chunk arrives
       if (!hasStartedStreaming) {
         hasStartedStreaming = true;
         if (heartbeatHandle) clearInterval(heartbeatHandle);
         console.log('\n🧠 Copilot started responding...');
       }
-      
+
       const chunk = event?.data?.deltaContent ?? '';
       output += chunk;
-      process.stdout.write(chunk); // Stream to console in real-time
+      process.stdout.write(chunk); // Stream to console
     };
 
     const onIdle = () => {
@@ -63,14 +127,30 @@ ${userMessage}
 
       if (timeoutHandle) clearTimeout(timeoutHandle);
       if (heartbeatHandle) clearInterval(heartbeatHandle);
-      cleanup();
+      if (telegramThrottleHandle) clearInterval(telegramThrottleHandle);
 
-      console.log('\n✅ Copilot streaming completed');
-      resolve({
-        text: output || 'No response from Copilot',
-        toolCalls: [],
-        toolResults: [],
-      });
+      // Send final message to Telegram
+      (async () => {
+        try {
+          if (bot && chatId && output) {
+            if (!telegramMessageId) {
+              await sendToTelegram(output);
+            } else {
+              await editTelegramMessage(telegramMessageId, output);
+            }
+          }
+        } catch (err) {
+          console.error('❌ Final Telegram update error:', err.message);
+        }
+
+        cleanup();
+        console.log('\n✅ Copilot streaming completed');
+        resolve({
+          text: output || 'No response from Copilot',
+          toolCalls: [],
+          toolResults: [],
+        });
+      })();
     };
 
     const onError = (err) => {
@@ -79,33 +159,35 @@ ${userMessage}
 
       if (timeoutHandle) clearTimeout(timeoutHandle);
       if (heartbeatHandle) clearInterval(heartbeatHandle);
+      if (telegramThrottleHandle) clearInterval(telegramThrottleHandle);
       cleanup();
 
       reject(err);
     };
 
     const cleanup = () => {
-      session.off('assistant.message_delta', onDelta);
-      session.off('session.idle', onIdle);
-      session.off('error', onError);
+      if (unsubscribeDelta) unsubscribeDelta();
+      if (unsubscribeIdle) unsubscribeIdle();
+      if (unsubscribeError) unsubscribeError();
     };
 
-    // Register event listeners
-    session.on('assistant.message_delta', onDelta);
-    session.on('session.idle', onIdle);
-    session.on('error', onError);
+    // Register event listeners (on() returns unsubscribe function)
+    unsubscribeDelta = session.on('assistant.message_delta', onDelta);
+    unsubscribeIdle = session.on('session.idle', onIdle);
+    unsubscribeError = session.on('error', onError);
 
     // Set timeout for long-running tasks
     timeoutHandle = setTimeout(() => {
       if (!isFinished) {
         isFinished = true;
         if (heartbeatHandle) clearInterval(heartbeatHandle);
+        if (telegramThrottleHandle) clearInterval(telegramThrottleHandle);
         cleanup();
         reject(new Error(`⏱️ Copilot streaming timeout after ${TIMEOUT_MS / 1000}s (is Copilot CLI responsive?)`));
       }
     }, TIMEOUT_MS);
 
-    // Send request using streaming (not sendAndWait)
+    // Send request using streaming
     (async () => {
       try {
         console.log('📡 Sending to Copilot CLI...');
@@ -116,6 +198,11 @@ ${userMessage}
             console.log('⏳ Copilot thinking...');
           }
         }, HEARTBEAT_INTERVAL);
+
+        // Start Telegram throttle timer
+        if (bot && chatId) {
+          telegramThrottleHandle = setInterval(flushTelegramBuffer, TELEGRAM_THROTTLE);
+        }
 
         await session.send({
           prompt: composed,
