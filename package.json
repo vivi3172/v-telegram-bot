@@ -1,0 +1,36 @@
+{
+  "name": "v-telegram-bot",
+  "version": "2.0.0",
+  "description": "AI-powered code refactoring bot with Copilot SDK agent",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "copilot",
+    "agent",
+    "mcp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@github/copilot-sdk": "^0.1.20",
+    "dotenv": "^16.0.3",
+    "node-telegram-bot-api": "^0.61.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivi3172/v-telegram-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vivi3172/v-telegram-bot/issues"
+  },
+  "homepage": "https://github.com/vivi3172/v-telegram-bot#readme"
+}
