@@ -4,17 +4,15 @@
 
 ## 📝 專案簡介
 
-**v-telegram-bot** 是一個 Telegram 機器人，利用 GitHub Copilot SDK 提供智能程式碼分析、重構建議和程式碼修改功能。使用者可以直接透過 Telegram 與 AI 助手互動，進行各種程式碼相關的工作。
+**v-telegram-bot** 是一個 Telegram 機器人，利用 GitHub Copilot SDK 提供 AI 驅動的程式碼建議、重構指導和技術諮詢。使用者可以直接透過 Telegram 與 AI 助手互動，進行各種程式碼相關的討論和獲取建議。
 
 ### ✨ 主要功能
 
 - 🧠 **GitHub Copilot 整合** - 使用官方 Copilot SDK 提供高級 AI 能力
-- 💬 **Telegram 機器人** - 透過 Telegram 發送程式碼分析請求
+- 💬 **Telegram 機器人** - 透過 Telegram 發送程式碼相關的問題和需求
 - 🔄 **串流回應** - 即時串流 AI 回應，並顯示進度指示
-- 📁 **專案管理** - 支援多個專案，輕鬆切換
-- 📊 **程式碼分析** - 分析程式碼變更、生成差異檔、審查補丁
-- 🎯 **對話記錄** - 為每個使用者維持對話上下文
-- ⚡ **生產就緒** - 適當的錯誤處理、資源清理和管理
+- 📁 **專案管理** - 支援多個本地專案，輕鬆切換
+- 💡 **AI 程式碼** - 獲取程式碼改進、重構和優化建議並直接執行開發
 
 ---
 
@@ -22,7 +20,7 @@
 
 ### 前置需求
 
-- **Node.js** 18.0+ ([下載](https://nodejs.org/))
+- **Node.js** 22.0+ ([下載](https://nodejs.org/))
 - **GitHub Copilot CLI** 已安裝並配置 ([設定指南](https://github.com/github/copilot-cli))
 - **Telegram 機器人令牌** 來自 [@BotFather](https://t.me/BotFather)
 - 您的 Telegram 聊天 ID（選擇性，用於管理員通知）
@@ -56,12 +54,10 @@ BOT_TOKEN=123456789:ABCDEfghIjklMnoPqrsTuvWxyz
 
 # 選擇性：您的 Telegram 聊天 ID，用於啟動通知
 TELEGRAM_ADMIN_CHAT_ID=987654321
-
-# 選擇性：MCP 伺服器配置（如果使用 MCP 工具）
-MCP_SERVER_PATH=node C:/path/to/v-mcp/index.js
 ```
 
 **如何取得您的 Telegram 聊天 ID：**
+
 1. 發送一條訊息到您的機器人
 2. 造訪：`https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
 3. 在回應中找到 `chat.id`
@@ -131,6 +127,7 @@ npm start
 ### 基本命令
 
 #### `/start`
+
 顯示歡迎訊息和可用命令
 
 ```
@@ -138,6 +135,7 @@ npm start
 ```
 
 #### `/project list`
+
 查看所有已配置的專案並在其間切換
 
 ```
@@ -145,6 +143,7 @@ npm start
 ```
 
 #### `/project use <別名>`
+
 切換到特定專案
 
 ```
@@ -152,6 +151,7 @@ npm start
 ```
 
 #### `/project set <別名>=<路徑>`
+
 註冊新專案
 
 ```
@@ -159,6 +159,7 @@ npm start
 ```
 
 #### `/copilot ping`
+
 測試 Copilot CLI 連接
 
 ```
@@ -184,13 +185,17 @@ npm start
 ## 📊 使用者介面
 
 ### 專案選擇菜單
+
 執行 `/project list` 後，您將看到內聯按鈕：
+
 - 選擇任何專案，✓ 指示目前選項
 - 新增專案
 - 查看幫助
 
 ### 處理回饋
+
 發送請求時，您會看到：
+
 ```
 ⚙️ 正在處理您的需求...
 
@@ -198,7 +203,9 @@ npm start
 ```
 
 ### 回應格式
+
 Copilot 回應以安全的 Markdown 程式碼區塊發送：
+
 ```
 [您的 AI 回應在此 - 對 HTML/JS/程式碼內容安全]
 ```
@@ -239,7 +246,6 @@ v-telegram-bot/
 | **runAgent.js** | 處理串流回應，並進行實時 Telegram 更新 |
 | **botHandler.js** | 處理 Telegram 訊息並管理機器人命令 |
 | **sessionManager.js** | 維持每個使用者的會話狀態（專案、對話記錄） |
-| **mcpClient.js** | 整合模型上下文協議以獲得擴展功能 |
 | **formatter.js** | 格式化和拆分長訊息以適應 Telegram（4000 字元限制） |
 
 ---
@@ -249,6 +255,7 @@ v-telegram-bot/
 ### 串流行為
 
 機器人使用 GitHub Copilot SDK 串流模式：
+
 - **逾時：** 180 秒（3 分鐘）用於長時間執行的任務
 - **心跳：** 每 5 秒顯示一次「⏳ Copilot 思考中...」
 - **Telegram 限流：** 每 2 秒發送一次更新（速率限制安全）
@@ -256,6 +263,7 @@ v-telegram-bot/
 ### 訊息格式
 
 所有 Copilot 回應都包含在 Markdown 程式碼區塊中，以安全地顯示：
+
 - HTML/XML 標籤
 - JavaScript 程式碼
 - SQL 查詢
@@ -268,37 +276,43 @@ v-telegram-bot/
 |------|------|------|
 | `BOT_TOKEN` | ✅ 是 | Telegram 機器人令牌 |
 | `TELEGRAM_ADMIN_CHAT_ID` | ❌ 否 | 啟動通知的聊天 ID |
-| `MCP_SERVER_PATH` | ❌ 否 | MCP 伺服器可執行檔路徑 |
 
 ---
 
 ## 🐛 疑難排解
 
 ### 機器人不回應
+
 1. 檢查 `.env` 中的 `BOT_TOKEN` 是否正確
 2. 驗證機器人是否正在執行：`npm start` 或 `npm run dev`
 3. 檢查控制台日誌是否有錯誤
 4. 使用 `/copilot ping` 命令進行測試
 
 ### Copilot SDK 初始化失敗
+
 ```
 ❌ Copilot SDK initialization failed
 ```
 
 **解決方案：**
+
 1. 確保 GitHub Copilot CLI 已安裝：`which gh-copilot` 或 `where gh-copilot`
 2. 驗證 Copilot CLI 已驗證身份：`gh copilot --version`
 3. 檢查 Copilot CLI 是否在 PATH 中
 4. 重新啟動 Copilot CLI 服務
 
 ### Telegram 中出現「Unsupported start tag」錯誤
+
 此問題已修復！所有回應現在使用 Markdown 格式（不解析 HTML）。
 
 ### 長訊息被截斷
+
 超過 4000 字元的訊息會自動分割為多條 Telegram 訊息。
 
 ### 找不到專案路徑
+
 驗證路徑存在且可存取：
+
 - Windows：`C:\path\to\project`
 - Unix：`/path/to/project`
 
@@ -365,51 +379,6 @@ v-telegram-bot/
 
 ---
 
-## 📚 使用範例
-
-### 範例 1：程式碼重構
-```
-使用者：重構我的登入函數使用 async/await
-
-機器人：[分析專案上下文中的程式碼]
-     [返回重構的版本和說明]
-```
-
-### 範例 2：程式碼審查
-```
-使用者：審查這個身份驗證模組的安全問題
-
-機器人：[檢查程式碼]
-     [列出潛在的漏洞]
-     [建議改進]
-```
-
-### 範例 3：生成差異
-```
-使用者：生成差異以為此函數新增錯誤處理
-
-機器人：[建立前後比較]
-     [提供補丁檔]
-```
-
----
-
-## 🤝 貢獻
-
-本專案由開發團隊維護。如有問題或建議：
-
-1. 檢查現有問題：[GitHub Issues](https://github.com/vivi3172/v-telegram-bot/issues)
-2. 建立新問題並詳細說明
-3. 包含控制台日誌和錯誤訊息
-
----
-
-## 📄 授權
-
-MIT 授權 - 詳見 LICENSE 檔案
-
----
-
 ## 🔗 資源
 
 - [GitHub Copilot SDK 文檔](https://github.com/github/copilot-cli)
@@ -433,4 +402,3 @@ MIT 授權 - 詳見 LICENSE 檔案
 
 **最後更新：** 2026 年 2 月  
 **版本：** 2.0.0  
-**狀態：** 生產就緒 ✅
