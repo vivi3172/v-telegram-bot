@@ -20,6 +20,7 @@ export function initializeBotHandler(botToken, agent) {
    * Get or create conversation context
    */
   function getConversation(userId) {
+    console.log(`🔍 Retrieving conversation for user ${userId}`);
     if (!conversations.has(userId)) {
       conversations.set(userId, createConversationContext(userId));
     }
@@ -166,8 +167,9 @@ Example:
         : '';
 
       // Run agent with project context
+      console.log(`\n💬 [User ${userId}] ${userMessage.substring(0, 100)}`);
       const agentResponse = await runAgent(agent, userMessage, projectPath);
-
+      console.log(`🤖 [Agent Response] ${agentResponse.text.substring(0, 100)}`);
       // Add to conversation history
       conversation.addMessage('user', userMessage);
       conversation.addMessage('assistant', agentResponse.text);

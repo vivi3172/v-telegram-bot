@@ -20,9 +20,15 @@ export async function runAgent(agent, userMessage, projectPath = '') {
 
   const { session } = agent;
   const TIMEOUT_MS = 180000; // 3 minutes for long tasks (review, diff, etc.)
+  const HEARTBEAT_INTERVAL = 5000; // Log every 5 seconds while thinking
 
   // Build composed prompt with project context
-  const composed = `Project Path: ${projectPath}
+  const composed = `
+  你是一位資深工程師助理。
+請全部使用繁體中文回答。
+請不要輸出 Plan、思考過程或步驟，只輸出最終答案。
+
+  Project Path: ${projectPath}
 
 User Request:
 ${userMessage}
@@ -32,10 +38,19 @@ ${userMessage}
     let output = '';
     let isFinished = false;
     let timeoutHandle = null;
+    let heartbeatHandle = null;
+    let hasStartedStreaming = false;
 
     // Event handlers
     const onDelta = (event) => {
-      if (isFinished) return; // Ignore events after completion
+      if (isFinished) return;
+      
+      // Log once when first chunk arrives
+      if (!hasStartedStreaming) {
+        hasStartedStreaming = true;
+        if (heartbeatHandle) clearInterval(heartbeatHandle);
+        console.log('\n🧠 Copilot started responding...');
+      }
       
       const chunk = event?.data?.deltaContent ?? '';
       output += chunk;
@@ -47,6 +62,7 @@ ${userMessage}
       isFinished = true;
 
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (heartbeatHandle) clearInterval(heartbeatHandle);
       cleanup();
 
       console.log('\n✅ Copilot streaming completed');
@@ -62,6 +78,7 @@ ${userMessage}
       isFinished = true;
 
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (heartbeatHandle) clearInterval(heartbeatHandle);
       cleanup();
 
       reject(err);
@@ -82,6 +99,7 @@ ${userMessage}
     timeoutHandle = setTimeout(() => {
       if (!isFinished) {
         isFinished = true;
+        if (heartbeatHandle) clearInterval(heartbeatHandle);
         cleanup();
         reject(new Error(`⏱️ Copilot streaming timeout after ${TIMEOUT_MS / 1000}s (is Copilot CLI responsive?)`));
       }
@@ -90,13 +108,18 @@ ${userMessage}
     // Send request using streaming (not sendAndWait)
     (async () => {
       try {
-        console.log('📡 Sending to Copilot CLI (streaming mode)...');
+        console.log('📡 Sending to Copilot CLI...');
+
+        // Start heartbeat to show we're thinking
+        heartbeatHandle = setInterval(() => {
+          if (!hasStartedStreaming && !isFinished) {
+            console.log('⏳ Copilot thinking...');
+          }
+        }, HEARTBEAT_INTERVAL);
 
         await session.send({
           prompt: composed,
         });
-
-        console.log('📤 Request sent, waiting for response...');
       } catch (err) {
         onError(err);
       }

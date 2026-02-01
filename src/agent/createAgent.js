@@ -21,7 +21,7 @@ export async function createAgent() {
     // Create session with streaming enabled for long tasks
     console.log('🔄 Creating streaming session...');
     const session = await client.createSession({
-      model: 'gpt-4.1',
+      model: 'gpt-5-mini',
       streaming: true,
     });
 
@@ -30,7 +30,7 @@ export async function createAgent() {
     }
 
     console.log('✅ Copilot CLI Client initialized successfully');
-    console.log('📡 Model: gpt-4.1 | Streaming: enabled');
+    console.log('📡 Model: gpt-5-mini | Streaming: disabled');
     
     return {
       client,
