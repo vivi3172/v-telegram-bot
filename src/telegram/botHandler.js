@@ -36,24 +36,50 @@ export function initializeBotHandler(botToken, agent) {
     const conversation = getConversation(userId);
     conversation.reset();
 
-    const welcomeText = `
-🚀 Welcome to AI Code Refactoring Bot!
+    const message = `🚀 *Bot 服務已啟動！*
 
-I'm powered by GitHub Copilot SDK and can help you with:
-✨ Analyzing code changes
-✨ Generating code diffs
-✨ Applying patches safely
-✨ Planning refactoring tasks
+👋 歡迎使用代碼變更智慧助手！
 
-Send me a message describing what you'd like to change in your code!
+我是您的 AI 編碼助手，請輸入需求開始使用～`;
 
-Example:
-"Add TypeScript support to my JavaScript project"
-"Refactor this function for better readability"
-"Generate a diff for the following requirement..."
-    `.trim();
+    const keyboard = [
+      [
+        {
+          text: '📁 查看專案',
+          callback_data: 'cmd_project_list',
+        },
+        {
+          text: '➕ 加入新專案',
+          callback_data: 'cmd_project_set',
+        },
+      ],
+      [
+        {
+          text: '📖 幫助',
+          callback_data: 'cmd_help',
+        },
+      ],
+    ];
 
-    bot.sendMessage(chatId, welcomeText);
+    try {
+      await bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: keyboard,
+        },
+      });
+      console.log(`🚀 /start message sent to chat ${chatId}`);
+
+      // Auto-show project list if projects are available
+      const userSession = sessionManager.getUserSession(userId);
+      if (Object.keys(userSession.projectAliases).length > 0) {
+        setTimeout(() => {
+          sendProjectListMessage(chatId, bot, userSession);
+        }, 500);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to send /start message: ${error.message}`);
+    }
   });
 
   /**
@@ -74,15 +100,15 @@ Example:
       const result = await runAgent(agent, 'What is 2 + 2?', projectPath);
       bot.sendMessage(
         chatId,
-        `✅ <b>Copilot CLI Diagnostic</b>\n\n${result.text}`,
-        { parse_mode: 'HTML' }
+        `✅ Copilot CLI Diagnostic\n\n\`\`\`\n${result.text}\n\`\`\``,
+        { parse_mode: 'Markdown' }
       );
     } catch (error) {
       console.error('❌ Copilot ping error:', error.message);
       bot.sendMessage(
         chatId,
-        `❌ <b>Copilot CLI Error</b>\n\n${error.message}`,
-        { parse_mode: 'HTML' }
+        `❌ Copilot CLI Error\n\n\`\`\`\n${error.message}\n\`\`\``,
+        { parse_mode: 'Markdown' }
       );
     }
   });
@@ -116,6 +142,11 @@ Example:
       bot.sendMessage(
         chatId,
         `✅ Switched to project: ${args}\nPath: ${projectPath}`
+      );
+      bot.sendMessage(
+        chatId,
+        `📌 *已選擇專案：${args}*\n\n現在您可以開始輸入需求，我會幫助您進行代碼變更、分析或重構！\n\n例如：\n• "添加 TypeScript 支持"\n• "重構此函數以提高可讀性"\n• "生成代碼差異"`,
+        { parse_mode: 'Markdown' }
       );
     } else if (subcommand === 'set') {
       if (!args.includes('=')) {
@@ -166,6 +197,13 @@ Example:
         ? userSession.projectAliases[userSession.activeProjectAlias]
         : '';
 
+      // Send processing reminder message
+      bot.sendMessage(
+        chatId,
+        `⚙️ *正在處理您的需求...*\n\n🤖 AI 助手正在進行分析和修改，請稍候 ⏳`,
+        { parse_mode: 'Markdown' }
+      );
+
       // Run agent with project context
       console.log(`\n💬 [User ${userId}] ${userMessage.substring(0, 100)}`);
       const agentResponse = await runAgent(agent, userMessage, projectPath);
@@ -178,7 +216,8 @@ Example:
       const responseLines = splitLongMessage(agentResponse.text, 4000);
 
       for (const line of responseLines) {
-        bot.sendMessage(chatId, line, { parse_mode: 'HTML' });
+        const wrappedLine = `\`\`\`\n${line}\n\`\`\``;
+        bot.sendMessage(chatId, wrappedLine, { parse_mode: 'Markdown' });
       }
     } catch (error) {
       console.error('❌ Error processing message:', error.message);
@@ -210,6 +249,11 @@ Example:
           chatId,
           `✅ Switched to: ${projectAlias}`
         );
+        bot.sendMessage(
+          chatId,
+          `📌 *已選擇專案：${projectAlias}*\n\n現在您可以開始輸入需求，我會幫助您進行代碼變更、分析或重構！\n\n例如：\n• "添加 TypeScript 支持"\n• "重構此函數以提高可讀性"\n• "生成代碼差異"`,
+          { parse_mode: 'Markdown' }
+        );
       }
     }
 
@@ -237,48 +281,48 @@ function sendProjectList(chatId, bot, userSession) {
  * Send project setup prompt
  */
 function sendProjectSetPrompt(chatId, bot) {
-  const message = `➕ <b>加入新專案</b>
+  const message = `➕ *加入新專案*
 
 請按照以下格式發送您的項目信息：
 
-<code>/project set alias=/path/to/project</code>
+\`/project set alias=/path/to/project\`
 
 例如：
-<code>/project set myapp=C:\\Users\\Project\\MyApp</code>
+\`/project set myapp=C:\\Users\\Project\\MyApp\`
 
-<b>提示：</b>
+*提示：*
 • 別名：用於識別項目的簡短名稱
 • 路徑：項目在您電腦上的完整路徑`;
 
-  bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+  bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 }
 
 /**
  * Send help menu
  */
 function sendHelpMenu(chatId, bot) {
-  const message = `📖 <b>使用幫助</b>
+  const message = `📖 *使用幫助*
 
-<b>可用功能：</b>
+*可用功能：*
 
-<b>1. /project list</b>
+*1. /project list*
 查看所有已註冊的項目並快速切換
 
-<b>2. /project use &lt;別名&gt;</b>
+*2. /project use <別名>*
 切換至指定項目
-例：<code>/project use myapp</code>
+例：\`/project use myapp\`
 
-<b>3. /project set &lt;別名&gt;=&lt;路徑&gt;</b>
+*3. /project set <別名>=<路徑>*
 註冊新項目
-例：<code>/project set myapp=C:\\Users\\Project\\MyApp</code>
+例：\`/project set myapp=C:\\Users\\Project\\MyApp\`
 
-<b>4. /start</b>
+*4. /start*
 顯示啟動菜單
 
-<b>發送任何消息</b>
+*發送任何消息*
 直接與 AI 助手互動，描述您想要的代碼變更`;
 
-  bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+  bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 }
 
 /**
@@ -304,7 +348,7 @@ export async function sendStartupMessage(bot, chatId) {
   }
 
   try {
-    const message = `🚀 <b>Bot 服務已啟動！</b>
+    const message = `🚀 *Bot 服務已啟動！*
 
 👋 歡迎使用代碼變更智慧助手！
 
@@ -330,7 +374,7 @@ export async function sendStartupMessage(bot, chatId) {
     ];
 
     await bot.sendMessage(chatId, message, {
-      parse_mode: 'HTML',
+      parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: keyboard,
       },
@@ -338,13 +382,14 @@ export async function sendStartupMessage(bot, chatId) {
     console.log(`🚀 Startup message sent to chat ${chatId}`);
 
     // Auto-show project list if projects are available
-    const userId = parseInt(chatId, 10);
-    const userSession = sessionManager.getUserSession(userId);
-    if (Object.keys(userSession.projectAliases).length > 0) {
-      setTimeout(() => {
-        sendProjectListMessage(chatId, bot, userSession);
-      }, 500);
-    }
+    // npm start啟動時如果要自動帶出我的專案列表，請解除下面註解
+    // const userId = parseInt(chatId, 10);
+    // const userSession = sessionManager.getUserSession(userId);
+    // if (Object.keys(userSession.projectAliases).length > 0) {
+    //   setTimeout(() => {
+    //     sendProjectListMessage(chatId, bot, userSession);
+    //   }, 500);
+    // }
   } catch (error) {
     console.error(`❌ Failed to send startup message: ${error.message}`);
   }
@@ -385,8 +430,8 @@ function sendProjectListMessage(chatId, bot, userSession) {
     },
   ]);
 
-  bot.sendMessage(chatId, '📁 <b>我的專案</b>\n\n請點擊按鈕選擇要使用的專案：', {
-    parse_mode: 'HTML',
+  bot.sendMessage(chatId, '📁 *我的專案*\n\n請點擊按鈕選擇要使用的專案：', {
+    parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: keyboard,
     },

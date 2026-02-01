@@ -55,7 +55,8 @@ ${userMessage}
       if (!bot || !chatId) return null;
 
       try {
-        const msg = await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        const wrappedText = `\`\`\`\n${text}\n\`\`\``;
+        const msg = await bot.sendMessage(chatId, wrappedText, { parse_mode: 'Markdown' });
         return msg.message_id;
       } catch (err) {
         console.error('❌ Telegram send error:', err.message);
@@ -67,10 +68,11 @@ ${userMessage}
       if (!bot || !chatId || !messageId) return false;
 
       try {
-        await bot.editMessageText(text, {
+        const wrappedText = `\`\`\`\n${text}\n\`\`\``;
+        await bot.editMessageText(wrappedText, {
           chat_id: chatId,
           message_id: messageId,
-          parse_mode: 'HTML',
+          parse_mode: 'Markdown',
         });
         return true;
       } catch (err) {
